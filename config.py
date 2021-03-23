@@ -15,7 +15,11 @@ image_height = 240
 image_width = 320
 image_channels = 3
 
-
+#double virtuellement la taille du dataset
 flipper_images = True
-retrain = True
-model_path = 'cycleGAN_modele.h5'
+
+#continuer un entrainement ?
+charger_modeles = True
+#quelle version continuer?
+charger_epoch = 0
+charger_batch = 100
