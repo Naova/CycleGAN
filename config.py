@@ -13,6 +13,7 @@ dossier_PNG_robot = dataset_robot_root + 'PNG/'
 #resolution de l'image d'entree
 image_height = 240
 image_width = 320
+image_channels = 3
 
 
 flipper_images = True
