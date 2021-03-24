@@ -249,5 +249,5 @@ class CycleGan():
         self.discriminateur_robot = keras.models.load_model(f'{dossier}/discriminateur_robot.h5')
         self.generateur_sim_robot = keras.models.load_model(f'{dossier}/generateur_sim_robot.h5')
         self.generateur_robot_sim = keras.models.load_model(f'{dossier}/generateur_robot_sim.h5')
-        with open(f'{dossier}/optimizer.pkl', 'rb'):
-            self.optimizer = pickle.load(f'{dossier}/optimizer.pkl')
+        with open(f'{dossier}/optimizer.pkl', 'rb') as opti_file:
+            self.optimizer = pickle.load(opti_file)
