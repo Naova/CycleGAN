@@ -9,6 +9,7 @@ from tensorflow.keras.optimizers import Adam
 import numpy as np
 import matplotlib.pyplot as plt
 import datetime
+import pickle
 import os
 
 from dataset_loader import PairGenerateur
@@ -32,6 +33,8 @@ class CycleGan():
         self.epoch_debut = 0
         self.batch_debut = 0
 
+        self.optimizer = Adam()
+
         if cfg.charger_modeles:
             self.charger_modeles(cfg.charger_epoch, cfg.charger_batch)
             self.epoch_debut = cfg.charger_epoch
@@ -40,7 +43,7 @@ class CycleGan():
             self.creer_modeles()
         self.construire_combined()
         self.compiler_modeles()
-        
+
     def creer_modeles(self):
         #construit les discriminateurs
         self.discriminateur_simulation = self.build_discriminateur()
@@ -55,11 +58,10 @@ class CycleGan():
         self.generateur_robot_sim = self.build_generateur()
         self.generateur_robot_sim._name = 'generateur_robot_sim'
     def compiler_modeles(self):
-        optimizer = Adam(0.002)
         self.discriminateur_simulation.trainable = True
         self.discriminateur_robot.trainable = True
-        self.discriminateur_simulation.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
-        self.discriminateur_robot.compile(loss='mse', optimizer=optimizer, metrics=['accuracy'])
+        self.discriminateur_simulation.compile(loss='mse', optimizer=self.optimizer, metrics=['accuracy'])
+        self.discriminateur_robot.compile(loss='mse', optimizer=self.optimizer, metrics=['accuracy'])
         self.discriminateur_simulation.trainable = False
         self.discriminateur_robot.trainable = False
         self.combined.compile(loss=['mse', 'mse',
@@ -68,7 +70,7 @@ class CycleGan():
                             loss_weights=[  1, 1,
                                             self.lambda_cycle, self.lambda_cycle,
                                             self.lambda_identity, self.lambda_identity ],
-                            optimizer=optimizer)
+                            optimizer=self.optimizer)
     def construire_combined(self):
         optimizer = Adam(0.002)
         img_A = Input(shape=self.image_shape)
@@ -238,6 +240,8 @@ class CycleGan():
         self.discriminateur_robot.save(f'{dossier}/discriminateur_robot.h5')
         self.generateur_sim_robot.save(f'{dossier}/generateur_sim_robot.h5')
         self.generateur_robot_sim.save(f'{dossier}/generateur_robot_sim.h5')
+        with open(f'{dossier}/optimizer.pkl', 'wb') as opti_file:
+            pickle.dump(self.optimizer, opti_file)
 
     def charger_modeles(self, epoch, batch):
         dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
@@ -245,4 +249,5 @@ class CycleGan():
         self.discriminateur_robot = keras.models.load_model(f'{dossier}/discriminateur_robot.h5')
         self.generateur_sim_robot = keras.models.load_model(f'{dossier}/generateur_sim_robot.h5')
         self.generateur_robot_sim = keras.models.load_model(f'{dossier}/generateur_robot_sim.h5')
-
+        with open(f'{dossier}/optimizer.pkl', 'rb'):
+            self.optimizer = pickle.load(f'{dossier}/optimizer.pkl')

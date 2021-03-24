@@ -19,7 +19,7 @@ image_channels = 3
 flipper_images = True
 
 #continuer un entrainement ?
-charger_modeles = True
+charger_modeles = False
 #quelle version continuer?
 charger_epoch = 0
 charger_batch = 100
