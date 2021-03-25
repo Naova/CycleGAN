@@ -207,6 +207,18 @@ class CycleGan():
                     print('sauvegarde du modele...')
                     self.sauvegarde_modeles(epoch, i + self.batch_debut)
             self.batch_debut = 0
+    
+    def ycbcr2rgb(self, img_ycbcr:np.array):
+        # Rescale image 0 - 1
+        img_ycbcr = 0.5 * img_ycbcr + 0.5
+        #convertion en RGB
+        img = img_ycbcr*255
+        xform = np.array([[1, 0, 1.402], [1, -0.34414, -.71414], [1, 1.772, 0]])
+        img[0][:,:,1:] -= 128
+        img[0] = img[0].dot(xform.T)
+        np.putmask(img, img > 255, 255)
+        np.putmask(img, img < 0, 0)
+        return img
 
     def sauvegarde_echantillons(self, epoch, i):
         dossier = f'echantillons/epoch_{epoch:03}/batch_{i:04}'
@@ -222,16 +234,16 @@ class CycleGan():
                 # Translate back to original domain
                 reconstr_sim = self.generateur_robot2sim.predict(fake_robot)
                 reconstr_robot = self.generateur_sim2robot.predict(fake_sim)
-                gen_imgs = np.concatenate([image_simulation, fake_robot, reconstr_sim, image_robot, fake_sim, reconstr_robot])
-                # Rescale images 0 - 1
-                gen_imgs = 0.5 * gen_imgs + 0.5
-
+                gen_imgs = np.concatenate([self.ycbcr2rgb(image_simulation), self.ycbcr2rgb(fake_robot), 
+                                            self.ycbcr2rgb(reconstr_sim), self.ycbcr2rgb(image_robot), 
+                                            self.ycbcr2rgb(fake_sim), self.ycbcr2rgb(reconstr_robot)])
+                
                 titles = ['Original', 'Translated', 'Reconstructed']
                 fig, axs = plt.subplots(2, 3)
                 cnt = 0
                 for r in range(2):
                     for c in range(3):
-                        axs[r,c].imshow((gen_imgs[cnt]*255).astype(np.uint8))
+                        axs[r,c].imshow((gen_imgs[cnt]).astype(np.uint8))
                         axs[r,c].set_title(titles[c])
                         axs[r,c].axis('off')
                         cnt += 1

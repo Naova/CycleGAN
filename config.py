@@ -22,4 +22,4 @@ flipper_images = True
 charger_modeles = False
 #quelle version continuer?
 charger_epoch = 0
-charger_batch = 100
+charger_batch = 0
