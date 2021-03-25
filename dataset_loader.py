@@ -31,8 +31,8 @@ class PairGenerateur:
     def nb_batches(self):
         return int(len(self.entrees_simulation)/self.batch_size)
 
-    def generer_paires(self):
-        for i in range(self.nb_batches()):
+    def generer_paires(self, depart=0):
+        for i in range(depart, self.nb_batches()):
             j = i + self.batch_size if i + self.batch_size <= len(self.entrees_simulation) else len(self.entrees_simulation)
             simu = self.entrees_simulation[i:j]
             robot = random.choices(self.entrees_robot, k=self.batch_size)

@@ -33,16 +33,21 @@ class CycleGan():
         self.epoch_debut = 0
         self.batch_debut = 0
 
-        self.optimizer = Adam()
+        self.creer_modeles()
 
         if cfg.charger_modeles:
-            self.charger_modeles(cfg.charger_epoch, cfg.charger_batch)
-            self.epoch_debut = cfg.charger_epoch
-            self.batch_debut = cfg.charger_batch
+            self.charger_optimizer(cfg.charger_epoch, cfg.charger_batch)
         else:
-            self.creer_modeles()
+            self.optimizer = Adam()
+        
         self.construire_combined()
         self.compiler_modeles()
+
+        if cfg.charger_modeles:
+            self.charger_poids(cfg.charger_epoch, cfg.charger_batch)
+
+            self.epoch_debut = cfg.charger_epoch
+            self.batch_debut = cfg.charger_batch
 
     def creer_modeles(self):
         #construit les discriminateurs
@@ -53,10 +58,10 @@ class CycleGan():
         self.discriminateur_robot._name = 'discriminateur_robot'
 
         #construit les generateurs
-        self.generateur_sim_robot = self.build_generateur()
-        self.generateur_sim_robot._name = 'generateur_sim_robot'
-        self.generateur_robot_sim = self.build_generateur()
-        self.generateur_robot_sim._name = 'generateur_robot_sim'
+        self.generateur_sim2robot = self.build_generateur()
+        self.generateur_sim2robot._name = 'generateur_sim2robot'
+        self.generateur_robot2sim = self.build_generateur()
+        self.generateur_robot2sim._name = 'generateur_robot2sim'
     def compiler_modeles(self):
         self.discriminateur_simulation.trainable = True
         self.discriminateur_robot.trainable = True
@@ -72,26 +77,25 @@ class CycleGan():
                                             self.lambda_identity, self.lambda_identity ],
                             optimizer=self.optimizer)
     def construire_combined(self):
-        optimizer = Adam(0.002)
-        img_A = Input(shape=self.image_shape)
-        img_B = Input(shape=self.image_shape)
+        true_simu = Input(shape=self.image_shape) #vraie simu
+        true_robot = Input(shape=self.image_shape) #vraie robot
         # Translate images to the other domain
-        fake_B = self.generateur_sim_robot(img_A)
-        fake_A = self.generateur_robot_sim(img_B)
+        fake_robot = self.generateur_sim2robot(true_simu) #fake robot
+        fake_simu = self.generateur_robot2sim(true_robot) #fake simu
         # Translate images back to original domain
-        reconstr_A = self.generateur_sim_robot(fake_B)
-        reconstr_B = self.generateur_robot_sim(fake_A)
+        reconstr_simu = self.generateur_robot2sim(fake_robot) #fake fake simu
+        reconstr_robot = self.generateur_sim2robot(fake_simu) #fake fake robot
         # Identity mapping of images
-        img_A_id = self.generateur_sim_robot(img_A)
-        img_B_id = self.generateur_robot_sim(img_B)
+        robot_identity = self.generateur_sim2robot(true_robot)
+        simu_identity = self.generateur_robot2sim(true_simu)
         # Discriminators determines validity of translated images
-        valid_A = self.discriminateur_simulation(fake_A)
-        valid_B = self.discriminateur_robot(fake_B)
+        valid_simu = self.discriminateur_simulation(fake_simu)
+        valid_robot = self.discriminateur_robot(fake_robot)
         # Combined model trains generators to fool discriminators
-        self.combined = Model(inputs=[img_A, img_B],
-                            outputs=[ valid_A, valid_B,
-                                        reconstr_A, reconstr_B,
-                                        img_A_id, img_B_id ])
+        self.combined = Model(inputs=[true_simu, true_robot],
+                            outputs=[ valid_simu, valid_robot,
+                                      reconstr_simu, reconstr_robot,
+                                      simu_identity, robot_identity ])
 
     def build_generateur(self):
         """U-Net Generator"""
@@ -149,13 +153,13 @@ class CycleGan():
 
         return Model(img, validity)
     
-    def train(self, epochs:int, echantillon_intervalle = 10, savegarde_intervalle = 50):
+    def train(self, epochs:int, echantillon_intervalle = 25, sauvegarde_intervalle = 50):
         start_time = datetime.datetime.now()
         # Adversarial loss ground truths
         valid = np.ones((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
         fake = np.zeros((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
         for epoch in range(self.epoch_debut, epochs):
-            for i, batch in enumerate(self.data_generateur_train.generer_paires()):
+            for i, batch in enumerate(self.data_generateur_train.generer_paires(self.batch_debut)):
                 if i + self.batch_debut > len(self.data_generateur_train):
                     break
                 # ----------------------
@@ -163,8 +167,8 @@ class CycleGan():
                 # ----------------------
 
                 # Translate images to opposite domain
-                fake_robot = self.generateur_sim_robot.predict(batch[:,0,:,:])
-                fake_sim = self.generateur_robot_sim.predict(batch[:,1,:,:])
+                fake_robot = self.generateur_sim2robot.predict(batch[:,0,:,:])
+                fake_sim = self.generateur_robot2sim.predict(batch[:,1,:,:])
 
                 # Train the discriminators (original images = real / translated = Fake)
                 d_sim_loss_real = self.discriminateur_simulation.train_on_batch(batch[:,0,:,:], valid)
@@ -199,8 +203,10 @@ class CycleGan():
                                                                             elapsed_time))
                 if i % echantillon_intervalle == 0:
                     self.sauvegarde_echantillons(epoch, i + self.batch_debut)
-                if i % savegarde_intervalle == 0:
+                if i % sauvegarde_intervalle == 0:
+                    print('sauvegarde du modele...')
                     self.sauvegarde_modeles(epoch, i + self.batch_debut)
+            self.batch_debut = 0
 
     def sauvegarde_echantillons(self, epoch, i):
         dossier = f'echantillons/epoch_{epoch:03}/batch_{i:04}'
@@ -211,11 +217,11 @@ class CycleGan():
                 image_simulation = np.array([paire[0]])
                 image_robot = np.array([paire[1]])
                 # Translate images to the other domain
-                fake_robot = self.generateur_sim_robot.predict(image_simulation)
-                fake_sim = self.generateur_robot_sim.predict(image_robot)
+                fake_robot = self.generateur_sim2robot.predict(image_simulation)
+                fake_sim = self.generateur_robot2sim.predict(image_robot)
                 # Translate back to original domain
-                reconstr_sim = self.generateur_robot_sim.predict(fake_robot)
-                reconstr_robot = self.generateur_sim_robot.predict(fake_sim)
+                reconstr_sim = self.generateur_robot2sim.predict(fake_robot)
+                reconstr_robot = self.generateur_sim2robot.predict(fake_sim)
                 gen_imgs = np.concatenate([image_simulation, fake_robot, reconstr_sim, image_robot, fake_sim, reconstr_robot])
                 # Rescale images 0 - 1
                 gen_imgs = 0.5 * gen_imgs + 0.5
@@ -236,18 +242,23 @@ class CycleGan():
     def sauvegarde_modeles(self, epoch, batch):
         dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
         os.makedirs(dossier, exist_ok=True)
-        self.discriminateur_simulation.save(f'{dossier}/discriminateur_simulation.h5')
-        self.discriminateur_robot.save(f'{dossier}/discriminateur_robot.h5')
-        self.generateur_sim_robot.save(f'{dossier}/generateur_sim_robot.h5')
-        self.generateur_robot_sim.save(f'{dossier}/generateur_robot_sim.h5')
+        if os.path.exists(f'{dossier}/discriminateur_simulation.h5'):
+            return
+        self.discriminateur_simulation.save_weights(f'{dossier}/discriminateur_simulation.tf')
+        self.discriminateur_robot.save_weights(f'{dossier}/discriminateur_robot.tf')
+        self.generateur_sim2robot.save_weights(f'{dossier}/generateur_sim2robot.tf')
+        self.generateur_robot2sim.save_weights(f'{dossier}/generateur_robot2sim.tf')
         with open(f'{dossier}/optimizer.pkl', 'wb') as opti_file:
             pickle.dump(self.optimizer, opti_file)
 
-    def charger_modeles(self, epoch, batch):
+    def charger_poids(self, epoch, batch):
         dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
-        self.discriminateur_simulation = keras.models.load_model(f'{dossier}/discriminateur_simulation.h5')
-        self.discriminateur_robot = keras.models.load_model(f'{dossier}/discriminateur_robot.h5')
-        self.generateur_sim_robot = keras.models.load_model(f'{dossier}/generateur_sim_robot.h5')
-        self.generateur_robot_sim = keras.models.load_model(f'{dossier}/generateur_robot_sim.h5')
+        self.discriminateur_simulation.load_weights(f'{dossier}/discriminateur_simulation.tf')
+        self.discriminateur_robot.load_weights(f'{dossier}/discriminateur_robot.tf')
+        self.generateur_sim2robot.load_weights(f'{dossier}/generateur_sim2robot.tf')
+        self.generateur_robot2sim.load_weights(f'{dossier}/generateur_robot2sim.tf')
+    
+    def charger_optimizer(self, epoch, batch):
+        dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
         with open(f'{dossier}/optimizer.pkl', 'rb') as opti_file:
             self.optimizer = pickle.load(opti_file)

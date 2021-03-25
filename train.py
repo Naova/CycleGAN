@@ -6,7 +6,7 @@ import config as cfg
 
 
 def main():
-    train, test = dataset_loader.create_dataset(8)
+    train, test = dataset_loader.create_dataset(10)
 
     cycleGan = CycleGan((cfg.image_height, cfg.image_width, cfg.image_channels), train, test)
     cycleGan.combined.summary()
