@@ -2,3 +2,4 @@ Dataset/
 __pycache__/
 echantillons/
 modeles/
+tensorboard_logs/

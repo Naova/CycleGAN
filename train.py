@@ -6,11 +6,11 @@ import config as cfg
 
 
 def main():
-    train, test = dataset_loader.create_dataset(10)
+    train, test = dataset_loader.create_dataset(cfg.batch_size)
 
     cycleGan = CycleGan((cfg.image_height, cfg.image_width, cfg.image_channels), train, test)
     cycleGan.combined.summary()
-    cycleGan.train(200)
+    cycleGan.train(cfg.max_epoch, cfg.echantillon_intervalle, cfg.sauvegarde_intervalle)
     breakpoint()
 
 if __name__ == '__main__':

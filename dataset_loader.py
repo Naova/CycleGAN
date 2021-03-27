@@ -51,7 +51,7 @@ def lire_entrees(dossier:str):
     
     return entrees
 
-def split_dataset(entrees_simulation, entrees_robot, batch_size=16):
+def split_dataset(entrees_simulation, entrees_robot, batch_size):
     random.shuffle(entrees_simulation)
     random.shuffle(entrees_robot)
 

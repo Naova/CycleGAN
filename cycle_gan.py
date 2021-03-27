@@ -38,7 +38,7 @@ class CycleGan():
         if cfg.charger_modeles:
             self.charger_optimizer(cfg.charger_epoch, cfg.charger_batch)
         else:
-            self.optimizer = Adam()
+            self.optimizer = Adam(0.0002)
         
         self.construire_combined()
         self.compiler_modeles()
@@ -48,6 +48,16 @@ class CycleGan():
 
             self.epoch_debut = cfg.charger_epoch
             self.batch_debut = cfg.charger_batch
+        
+        self.tensorboard = tf.keras.callbacks.TensorBoard(
+            log_dir='tensorboard_logs',
+            histogram_freq=0,
+            write_graph=True,
+            write_grads=True,
+            update_freq='batch',
+            batch_size=cfg.batch_size
+        )
+        self.tensorboard._log_write_dir = 'tensorboard_logs' #erreur etrange...
 
     def creer_modeles(self):
         #construit les discriminateurs
@@ -153,14 +163,15 @@ class CycleGan():
 
         return Model(img, validity)
     
-    def train(self, epochs:int, echantillon_intervalle = 25, sauvegarde_intervalle = 50):
+    def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle):
         start_time = datetime.datetime.now()
         # Adversarial loss ground truths
         valid = np.ones((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
         fake = np.zeros((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
         for epoch in range(self.epoch_debut, epochs):
             for i, batch in enumerate(self.data_generateur_train.generer_paires(self.batch_debut)):
-                if i + self.batch_debut > len(self.data_generateur_train):
+                no_batch = i + self.batch_debut
+                if no_batch > len(self.data_generateur_train):
                     break
                 # ----------------------
                 #  Train Discriminators
@@ -197,17 +208,28 @@ class CycleGan():
                 # Plot the progress
                 print ("[Epoch %d/%d] [Batch %d/%d] [D loss: %f, acc: %3d%%] [G loss: %05f] time: %s " \
                                                                         % ( epoch, epochs,
-                                                                            i + self.batch_debut, self.data_generateur_train.nb_batches(),
+                                                                            no_batch, self.data_generateur_train.nb_batches(),
                                                                             d_loss[0], 100*d_loss[1],
                                                                             g_loss[0],
                                                                             elapsed_time))
-                if i % echantillon_intervalle == 0:
-                    self.sauvegarde_echantillons(epoch, i + self.batch_debut)
-                if i % sauvegarde_intervalle == 0:
+                self.tensorboard_call(no_batch, g_loss)
+                if no_batch % echantillon_intervalle == 0:
+                    self.sauvegarde_echantillons(epoch, no_batch)
+                if no_batch % sauvegarde_intervalle == 0:
                     print('sauvegarde du modele...')
-                    self.sauvegarde_modeles(epoch, i + self.batch_debut)
+                    self.sauvegarde_modeles(epoch, no_batch)
             self.batch_debut = 0
+        self.tensorboard.on_train_end(None)
     
+    def named_logs(self, model, logs):
+        result = {}
+        for l in zip(model.metrics_names, logs):
+            result[l[0]] = l[1]
+        return result
+
+    def tensorboard_call(self, no_batch, loss):
+        self.tensorboard.on_epoch_end(no_batch, self.named_logs(self.generateur_sim2robot, g_loss))
+
     def ycbcr2rgb(self, img_ycbcr:np.array):
         # Rescale image 0 - 1
         img_ycbcr = 0.5 * img_ycbcr + 0.5
