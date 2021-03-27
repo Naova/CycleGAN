@@ -55,14 +55,15 @@ def split_dataset(entrees_simulation, entrees_robot, batch_size):
     random.shuffle(entrees_simulation)
     random.shuffle(entrees_robot)
 
-    train = PairGenerateur(entrees_simulation[:-batch_size], entrees_robot[:-batch_size], batch_size)
+    train = PairGenerateur(entrees_simulation[:-batch_size*2], entrees_robot[:-batch_size*2], batch_size)
+    validation = PairGenerateur(entrees_simulation[-batch_size*2:-batch_size], entrees_robot[-batch_size*2:-batch_size], batch_size)
     test = PairGenerateur(entrees_simulation[-batch_size:], entrees_robot[-batch_size:], batch_size)
 
-    return train, test
+    return train, validation, test
 
 def create_dataset(batch_size):
     entrees_simulation = lire_entrees(cfg.dossier_brut_simulation)
     entrees_robot = lire_entrees(cfg.dossier_brut_robot)
 
-    train, test = split_dataset(entrees_simulation, entrees_robot, batch_size)
-    return train, test
+    train, validation, test = split_dataset(entrees_simulation, entrees_robot, batch_size)
+    return train, validation, test

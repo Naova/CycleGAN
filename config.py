@@ -23,9 +23,10 @@ flipper_images = True
 max_epoch = 200
 echantillon_intervalle = 25
 sauvegarde_intervalle = 50
+tensorboard_intervalle = 5
 
 #reprendre un ancien entrainement?
-charger_modeles = False
+charger_modeles = True
 #si oui, quelle version continuer?
 charger_epoch = 0
-charger_batch = 0
+charger_batch = 500

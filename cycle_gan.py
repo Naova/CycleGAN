@@ -16,16 +16,17 @@ from dataset_loader import PairGenerateur
 import config as cfg
 
 class CycleGan():
-    def __init__(self, image_shape:tuple, data_generateur_train:PairGenerateur, data_generateur_test:PairGenerateur):
+    def __init__(self, image_shape:tuple, data_generateur_train:PairGenerateur, data_generateur_validation:PairGenerateur, data_generateur_test:PairGenerateur):
         super(CycleGan, self).__init__()
         self.image_shape = image_shape
         self.data_generateur_train = data_generateur_train
+        self.data_generateur_validation = data_generateur_validation
         self.data_generateur_test = data_generateur_test
 
         self.nb_filtres_g = 32
         self.nb_filtres_d = 64
         
-        self.lambda_cycle = 10.0
+        self.lambda_cycle = 5.0
         self.lambda_identity = 0.1 * self.lambda_cycle
 
         self.discriminateur_patch = (int(self.image_shape[0] / 2**4), int(self.image_shape[1] / 2**4), 1)
@@ -163,45 +164,15 @@ class CycleGan():
 
         return Model(img, validity)
     
-    def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle):
+    def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle, tensorboard_intervalle):
         start_time = datetime.datetime.now()
-        # Adversarial loss ground truths
-        valid = np.ones((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
-        fake = np.zeros((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
         for epoch in range(self.epoch_debut, epochs):
             for i, batch in enumerate(self.data_generateur_train.generer_paires(self.batch_debut)):
                 no_batch = i + self.batch_debut
                 if no_batch > len(self.data_generateur_train):
                     break
-                # ----------------------
-                #  Train Discriminators
-                # ----------------------
 
-                # Translate images to opposite domain
-                fake_robot = self.generateur_sim2robot.predict(batch[:,0,:,:])
-                fake_sim = self.generateur_robot2sim.predict(batch[:,1,:,:])
-
-                # Train the discriminators (original images = real / translated = Fake)
-                d_sim_loss_real = self.discriminateur_simulation.train_on_batch(batch[:,0,:,:], valid)
-                d_sim_loss_fake = self.discriminateur_simulation.train_on_batch(fake_sim, fake)
-                d_sim_loss = 0.5 * np.add(d_sim_loss_real, d_sim_loss_fake)
-
-                d_rob_loss_real = self.discriminateur_robot.train_on_batch(batch[:,1,:,:], valid)
-                d_rob_loss_fake = self.discriminateur_robot.train_on_batch(fake_robot, fake)
-                d_rob_loss = 0.5 * np.add(d_rob_loss_real, d_rob_loss_fake)
-
-                # Total disciminator loss
-                d_loss = 0.5 * np.add(d_sim_loss, d_rob_loss)
-
-                # ------------------
-                #  Train Generators
-                # ------------------
-
-                # Train the generators
-                g_loss = self.combined.train_on_batch([batch[:,0,:,:], batch[:,1,:,:]],
-                                                        [valid, valid,
-                                                        batch[:,0,:,:], batch[:,1,:,:],
-                                                        batch[:,0,:,:], batch[:,1,:,:]])
+                d_loss, g_loss = self.execute_model_on_batch(batch, Model.train_on_batch)
 
                 elapsed_time = datetime.datetime.now() - start_time
 
@@ -210,9 +181,13 @@ class CycleGan():
                                                                         % ( epoch, epochs,
                                                                             no_batch, self.data_generateur_train.nb_batches(),
                                                                             d_loss[0], 100*d_loss[1],
-                                                                            g_loss[0],
+                                                                            g_loss[1],
                                                                             elapsed_time))
-                self.tensorboard_call(no_batch, g_loss)
+                if no_batch % tensorboard_intervalle == 0:
+                    for i, batch in enumerate(self.data_generateur_validation.generer_paires()):
+                        val_d_loss, val_g_loss = self.execute_model_on_batch(batch, Model.test_on_batch)
+                        break
+                    self.tensorboard_call(no_batch + no_batch * epoch, g_loss, val_g_loss)
                 if no_batch % echantillon_intervalle == 0:
                     self.sauvegarde_echantillons(epoch, no_batch)
                 if no_batch % sauvegarde_intervalle == 0:
@@ -221,14 +196,36 @@ class CycleGan():
             self.batch_debut = 0
         self.tensorboard.on_train_end(None)
     
-    def named_logs(self, model, logs):
-        result = {}
-        for l in zip(model.metrics_names, logs):
-            result[l[0]] = l[1]
-        return result
+    def execute_model_on_batch(self, batch, fonction_execution):
+        # Adversarial loss ground truths
+        valid = np.ones((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
+        fake = np.zeros((self.data_generateur_train.batch_size, ) + self.discriminateur_patch)
 
-    def tensorboard_call(self, no_batch, loss):
-        self.tensorboard.on_epoch_end(no_batch, self.named_logs(self.generateur_sim2robot, g_loss))
+        # Translate images to opposite domain
+        fake_robot = self.generateur_sim2robot.predict(batch[:,0,:,:])
+        fake_sim = self.generateur_robot2sim.predict(batch[:,1,:,:])
+
+        # Train the discriminators (original images = real / translated = Fake)
+        d_sim_loss_real = fonction_execution(self.discriminateur_simulation, batch[:,0,:,:], valid)
+        d_sim_loss_fake = fonction_execution(self.discriminateur_simulation, fake_sim, fake)
+        d_sim_loss = 0.5 * np.add(d_sim_loss_real, d_sim_loss_fake)
+
+        d_rob_loss_real = fonction_execution(self.discriminateur_robot, batch[:,1,:,:], valid)
+        d_rob_loss_fake = fonction_execution(self.discriminateur_robot, fake_robot, fake)
+        d_rob_loss = 0.5 * np.add(d_rob_loss_real, d_rob_loss_fake)
+
+        # Total discriminator loss
+        d_loss = 0.5 * np.add(d_sim_loss, d_rob_loss)
+
+        # Train the generators
+        g_loss = fonction_execution(self.combined, [batch[:,0,:,:], batch[:,1,:,:]],
+                                                [valid, valid,
+                                                batch[:,0,:,:], batch[:,1,:,:],
+                                                batch[:,0,:,:], batch[:,1,:,:]])
+        return d_loss, g_loss
+
+    def tensorboard_call(self, no_epoch, train_loss, validation_loss):
+        self.tensorboard.on_epoch_end(no_epoch, {'train':train_loss, 'validation':validation_loss})
 
     def ycbcr2rgb(self, img_ycbcr:np.array):
         # Rescale image 0 - 1
