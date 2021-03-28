@@ -26,7 +26,7 @@ sauvegarde_intervalle = 50
 tensorboard_intervalle = 5
 
 #reprendre un ancien entrainement?
-charger_modeles = True
+charger_modeles = False
 #si oui, quelle version continuer?
 charger_epoch = 0
-charger_batch = 500
+charger_batch = 0

@@ -171,7 +171,8 @@ class CycleGan():
                 no_batch = i + self.batch_debut
                 if no_batch > len(self.data_generateur_train):
                     break
-
+                
+                #appelle `train_on_batch` sur le modele pour faire l'entrainement
                 d_loss, g_loss = self.execute_model_on_batch(batch, Model.train_on_batch)
 
                 elapsed_time = datetime.datetime.now() - start_time
@@ -185,9 +186,10 @@ class CycleGan():
                                                                             elapsed_time))
                 if no_batch % tensorboard_intervalle == 0:
                     for i, batch in enumerate(self.data_generateur_validation.generer_paires()):
+                        #appelle `test_on_batch` sur le modele pour faire la validation
                         val_d_loss, val_g_loss = self.execute_model_on_batch(batch, Model.test_on_batch)
                         break
-                    self.tensorboard_call(no_batch + no_batch * epoch, g_loss, val_g_loss)
+                    self.tensorboard_call(no_batch + self.data_generateur_train.nb_batches() * epoch, g_loss, val_g_loss)
                 if no_batch % echantillon_intervalle == 0:
                     self.sauvegarde_echantillons(epoch, no_batch)
                 if no_batch % sauvegarde_intervalle == 0:
