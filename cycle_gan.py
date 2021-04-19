@@ -122,7 +122,7 @@ class CycleGan():
         g = Concatenate()([g, input_layer])
         return g
     
-    def build_generateur(self, n_resnet=9):
+    def build_generateur(self, n_resnet=6):
         # weight initialization
         init = RandomNormal(stddev=0.02)
         # image input
@@ -141,7 +141,7 @@ class CycleGan():
         g = Activation('relu')(g)
         # R256
         for _ in range(n_resnet):
-            g = self.resnet_block(256, g)
+            g = self.resnet_block(128, g)
         # u128
         g = Conv2DTranspose(128, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(g)
         g = tfa.layers.InstanceNormalization(axis=-1)(g)
@@ -171,15 +171,15 @@ class CycleGan():
         d = tfa.layers.InstanceNormalization(axis=-1)(d)
         d = LeakyReLU(alpha=0.2)(d)
         # C256
-        d = Conv2D(256, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
+        d = Conv2D(128, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
         d = tfa.layers.InstanceNormalization(axis=-1)(d)
         d = LeakyReLU(alpha=0.2)(d)
         # C512
-        d = Conv2D(512, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
+        d = Conv2D(256, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
         d = tfa.layers.InstanceNormalization(axis=-1)(d)
         d = LeakyReLU(alpha=0.2)(d)
         # second last output layer
-        d = Conv2D(512, (4,4), padding='same', kernel_initializer=init)(d)
+        d = Conv2D(256, (4,4), padding='same', kernel_initializer=init)(d)
         d = tfa.layers.InstanceNormalization(axis=-1)(d)
         d = LeakyReLU(alpha=0.2)(d)
         # patch output
