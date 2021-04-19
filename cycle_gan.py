@@ -144,12 +144,12 @@ class CycleGan():
             g = self.resnet_block(128, g)
         # u128
         g = UpSampling2D()(g)
-        g = Conv2D(128, (1, 1), kernel_initializer=init)(g)
+        g = Conv2D(128, (3, 3), padding='same', kernel_initializer=init)(g)
         g = tfa.layers.InstanceNormalization(axis=-1)(g)
         g = Activation('relu')(g)
         # u64
         g = UpSampling2D()(g)
-        g = Conv2D(64, (1, 1), kernel_initializer=init)(g)
+        g = Conv2D(64, (3, 3), padding='same', kernel_initializer=init)(g)
         g = tfa.layers.InstanceNormalization(axis=-1)(g)
         g = Activation('relu')(g)
         # c7s1-3
