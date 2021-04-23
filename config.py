@@ -7,6 +7,10 @@ dossier_brut_simulation = dataset_simulation_root + 'Brut/'
 dataset_robot_root = 'Dataset/Robot/'
 dossier_brut_robot = dataset_robot_root + 'Brut/'
 
+#chemin d'acces vers le dataset (genere)
+dataset_genere_root = 'Dataset/Genere/'
+dossier_brut_genere = dataset_genere_root + 'Brut/'
+
 ## Parametres d'entrainement
 #taille des batches du dataset
 batch_size = 10

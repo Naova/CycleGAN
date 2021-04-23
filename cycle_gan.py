@@ -136,7 +136,7 @@ class CycleGan():
         g = tfa.layers.InstanceNormalization(axis=-1)(g)
         g = Activation('relu')(g)
         # d256
-        g = Conv2D(256, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(g)
+        g = Conv2D(192, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(g)
         g = tfa.layers.InstanceNormalization(axis=-1)(g)
         g = Activation('relu')(g)
         # R256
