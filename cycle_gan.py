@@ -108,89 +108,61 @@ class CycleGan():
                             outputs=[ valid_simu, valid_robot,
                                       reconstr_simu, reconstr_robot,
                                       simu_identity, robot_identity ])
-    def resnet_block(self, n_filters, input_layer):
-        # weight initialization
-        init = RandomNormal(stddev=0.02)
-        # first layer convolutional layer
-        g = Conv2D(n_filters, (3,3), padding='same', kernel_initializer=init)(input_layer)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        g = Activation('relu')(g)
-        # second convolutional layer
-        g = Conv2D(n_filters, (3,3), padding='same', kernel_initializer=init)(g)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        # concatenate merge channel-wise with input layer
-        g = Concatenate()([g, input_layer])
-        return g
-    
-    def build_generateur(self, n_resnet=6):
-        # weight initialization
-        init = RandomNormal(stddev=0.02)
-        # image input
-        in_image = Input(shape=self.image_shape)
-        # c7s1-64
-        g = Conv2D(64, (7,7), padding='same', kernel_initializer=init)(in_image)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        g = Activation('relu')(g)
-        # d128
-        g = Conv2D(128, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(g)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        g = Activation('relu')(g)
-        # d256
-        g = Conv2D(192, (3,3), strides=(2,2), padding='same', kernel_initializer=init)(g)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        g = Activation('relu')(g)
-        # R256
-        for _ in range(n_resnet):
-            g = self.resnet_block(128, g)
-        # u128
-        g = UpSampling2D()(g)
-        g = Conv2D(128, (3, 3), padding='same', kernel_initializer=init)(g)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        g = Activation('relu')(g)
-        # u64
-        g = UpSampling2D()(g)
-        g = Conv2D(64, (3, 3), padding='same', kernel_initializer=init)(g)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        g = Activation('relu')(g)
-        # c7s1-3
-        g = Conv2D(3, (7,7), padding='same', kernel_initializer=init)(g)
-        g = tfa.layers.InstanceNormalization(axis=-1)(g)
-        out_image = Activation('tanh')(g)
-        # define model
-        model = Model(in_image, out_image)
-        return model
+    def build_generateur(self):
+        """U-Net Generator"""
+        def conv2d(layer_input, filters, f_size=4):
+            """Layers used during downsampling"""
+            d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
+            d = LeakyReLU(alpha=0.2)(d)
+            d = tfa.layers.InstanceNormalization()(d)
+            return d
+
+        def deconv2d(layer_input, skip_input, filters, f_size=4):
+            """Layers used during upsampling"""
+            u = UpSampling2D(size=2)(layer_input)
+            u = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
+            u = tfa.layers.InstanceNormalization()(u)
+            u = Concatenate()([u, skip_input])
+            return u
+
+        # Image input
+        d0 = keras.layers.Input(shape=self.image_shape)
+
+        # Downsampling
+        d1 = conv2d(d0, self.nb_filtres_g)
+        d2 = conv2d(d1, self.nb_filtres_g*2)
+        d3 = conv2d(d2, self.nb_filtres_g*4)
+        d4 = conv2d(d3, self.nb_filtres_g*8)
+
+        # Upsampling
+        u1 = deconv2d(d4, d3, self.nb_filtres_g*4)
+        u2 = deconv2d(u1, d2, self.nb_filtres_g*2)
+        u3 = deconv2d(u2, d1, self.nb_filtres_g)
+
+        u4 = UpSampling2D(size=2)(u3)
+        output_img = Conv2D(self.image_shape[-1], kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
+
+        return Model(d0, output_img)
 
     def build_discriminateur(self):
-        # weight initialization
-        init = RandomNormal(stddev=0.02)
-        # source image input
-        in_image = Input(shape=self.image_shape)
-        # C64
-        d = Conv2D(64, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(in_image)
-        d = LeakyReLU(alpha=0.2)(d)
-        # C128
-        d = Conv2D(128, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
-        d = tfa.layers.InstanceNormalization(axis=-1)(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        # C256
-        d = Conv2D(128, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
-        d = tfa.layers.InstanceNormalization(axis=-1)(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        # C512
-        d = Conv2D(256, (4,4), strides=(2,2), padding='same', kernel_initializer=init)(d)
-        d = tfa.layers.InstanceNormalization(axis=-1)(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        # second last output layer
-        d = Conv2D(256, (4,4), padding='same', kernel_initializer=init)(d)
-        d = tfa.layers.InstanceNormalization(axis=-1)(d)
-        d = LeakyReLU(alpha=0.2)(d)
-        # patch output
-        patch_out = Conv2D(1, (4,4), padding='same', kernel_initializer=init)(d)
-        # define model
-        model = Model(in_image, patch_out)
-        # compile model
-        model.compile(loss='mse', optimizer=Adam(lr=0.0002, beta_1=0.5), loss_weights=[0.5])
-        return model
+        def d_layer(layer_input, filters, f_size=4, normalization=True):
+            """Discriminator layer"""
+            d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
+            d = LeakyReLU(alpha=0.2)(d)
+            if normalization:
+                d = tfa.layers.InstanceNormalization()(d)
+            return d
+
+        img = keras.layers.Input(shape=self.image_shape)
+
+        d1 = d_layer(img, self.nb_filtres_d, normalization=False)
+        d2 = d_layer(d1, self.nb_filtres_d*2)
+        d3 = d_layer(d2, self.nb_filtres_d*4)
+        d4 = d_layer(d3, self.nb_filtres_d*8)
+
+        validity = Conv2D(1, kernel_size=4, strides=1, padding='same')(d4)
+
+        return Model(img, validity)
     
     def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle, tensorboard_intervalle):
         start_time = datetime.datetime.now()

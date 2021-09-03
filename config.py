@@ -13,7 +13,7 @@ dossier_brut_genere = dataset_genere_root + 'Brut/'
 
 ## Parametres d'entrainement
 #taille des batches du dataset
-batch_size = 10
+batch_size = 8
 
 #resolution de l'image d'entree
 image_height = 240
@@ -26,11 +26,11 @@ flipper_images = True
 #boucle d'entrainement
 max_epoch = 200
 echantillon_intervalle = 25
-sauvegarde_intervalle = 50
+sauvegarde_intervalle = 25
 tensorboard_intervalle = 5
 
 #reprendre un ancien entrainement?
-charger_modeles = False
+charger_modeles = True
 #si oui, quelle version continuer?
-charger_epoch = 0
-charger_batch = 0
+charger_epoch = 156
+charger_batch = 75
