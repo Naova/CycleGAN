@@ -1,14 +1,14 @@
 ## Parametre du dataset
 #chemins d'acces vers le dataset (simulation)
-dataset_simulation_root = 'Dataset/Simulation/'
+dataset_simulation_root = 'Dataset/Simulation/upper/'
 dossier_brut_simulation = dataset_simulation_root + 'Brut/'
 
 #chemins d'acces vers le dataset (robot)
-dataset_robot_root = 'Dataset/Robot/'
+dataset_robot_root = 'Dataset/Robot/upper/'
 dossier_brut_robot = dataset_robot_root + 'Brut/'
 
 #chemin d'acces vers le dataset (genere)
-dataset_genere_root = 'Dataset/Genere/'
+dataset_genere_root = 'Dataset/Genere/upper/'
 dossier_brut_genere = dataset_genere_root + 'Brut/'
 
 ## Parametres d'entrainement
@@ -20,6 +20,9 @@ image_height = 240
 image_width = 320
 image_channels = 3
 
+resized_image_height = 128
+resized_image_width = 144
+
 #double virtuellement la taille du dataset
 flipper_images = True
 
@@ -30,7 +33,7 @@ sauvegarde_intervalle = 25
 tensorboard_intervalle = 5
 
 #reprendre un ancien entrainement?
-charger_modeles = True
+charger_modeles = False
 #si oui, quelle version continuer?
-charger_epoch = 156
-charger_batch = 75
+charger_epoch = 0
+charger_batch = 0

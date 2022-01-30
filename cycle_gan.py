@@ -1,8 +1,8 @@
 import tensorflow as tf
 from tensorflow import keras
 import tensorflow_addons as tfa
-from tensorflow.keras.layers import Input, Dense, Reshape, Flatten, Concatenate, LeakyReLU, UpSampling2D, Conv2D
-from tensorflow.keras.layers import BatchNormalization, Activation, ZeroPadding2D
+from tensorflow.keras.layers import Input, Concatenate, LeakyReLU, UpSampling2D, Conv2D, Conv2DTranspose
+from tensorflow.keras.layers import BatchNormalization, Activation, ZeroPadding2D, MaxPooling2D
 from tensorflow.keras.initializers import RandomNormal
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
@@ -17,9 +17,10 @@ from dataset_loader import PairGenerateur
 import config as cfg
 
 class CycleGan():
-    def __init__(self, image_shape:tuple, data_generateur_train:PairGenerateur, data_generateur_validation:PairGenerateur, data_generateur_test:PairGenerateur):
+    def __init__(self, image_shape:tuple, resized_image_shape:tuple, data_generateur_train:PairGenerateur, data_generateur_validation:PairGenerateur, data_generateur_test:PairGenerateur):
         super(CycleGan, self).__init__()
         self.image_shape = image_shape
+        self.resized_image_shape = resized_image_shape
         self.data_generateur_train = data_generateur_train
         self.data_generateur_validation = data_generateur_validation
         self.data_generateur_test = data_generateur_test
@@ -30,7 +31,7 @@ class CycleGan():
         self.lambda_cycle = 5.0
         self.lambda_identity = 0.1 * self.lambda_cycle
 
-        self.discriminateur_patch = (int(self.image_shape[0] / 2**4), int(self.image_shape[1] / 2**4), 1)
+        self.discriminateur_patch = (int(self.resized_image_shape[0] / 2**4) - 1, int(self.resized_image_shape[1] / 2**4), 1)
 
         self.epoch_debut = 0
         self.batch_debut = 0
@@ -89,8 +90,8 @@ class CycleGan():
                                             self.lambda_identity, self.lambda_identity ],
                             optimizer=self.optimizer)
     def construire_combined(self):
-        true_simu = Input(shape=self.image_shape) #vraie simu
-        true_robot = Input(shape=self.image_shape) #vraie robot
+        true_simu = Input(shape=self.resized_image_shape) #vraie simu
+        true_robot = Input(shape=self.resized_image_shape) #vraie robot
         # Translate images to the other domain
         fake_robot = self.generateur_sim2robot(true_simu) #fake robot
         fake_simu = self.generateur_robot2sim(true_robot) #fake simu
@@ -110,23 +111,32 @@ class CycleGan():
                                       simu_identity, robot_identity ])
     def build_generateur(self):
         """U-Net Generator"""
-        def conv2d(layer_input, filters, f_size=4):
+        def conv2d(layer_input, filters, f_size=3):
             """Layers used during downsampling"""
-            d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
-            d = LeakyReLU(alpha=0.2)(d)
+            d = Conv2D(filters,
+                        kernel_size=f_size,
+                        strides=1,
+                        padding='same',
+                        activation=LeakyReLU()
+                    )(layer_input)
             d = tfa.layers.InstanceNormalization()(d)
+            d = MaxPooling2D(2)(d)
             return d
 
-        def deconv2d(layer_input, skip_input, filters, f_size=4):
+        def deconv2d(layer_input, skip_input, filters, f_size=3):
             """Layers used during upsampling"""
-            u = UpSampling2D(size=2)(layer_input)
-            u = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation='relu')(u)
+            u = Conv2DTranspose(filters,
+                                kernel_size=f_size,
+                                strides=(2, 2),
+                                padding='same',
+                                activation=LeakyReLU(0.2)
+                            )(layer_input)
             u = tfa.layers.InstanceNormalization()(u)
             u = Concatenate()([u, skip_input])
             return u
 
         # Image input
-        d0 = keras.layers.Input(shape=self.image_shape)
+        d0 = keras.layers.Input(shape=self.resized_image_shape)
 
         # Downsampling
         d1 = conv2d(d0, self.nb_filtres_g)
@@ -140,29 +150,31 @@ class CycleGan():
         u3 = deconv2d(u2, d1, self.nb_filtres_g)
 
         u4 = UpSampling2D(size=2)(u3)
-        output_img = Conv2D(self.image_shape[-1], kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
+        output_img = Conv2D(self.resized_image_shape[-1], kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
 
         return Model(d0, output_img)
 
     def build_discriminateur(self):
-        def d_layer(layer_input, filters, f_size=4, normalization=True):
+        def d_layer(layer_input, filters, f_size=3, normalization=True, pooling=True):
             """Discriminator layer"""
-            d = Conv2D(filters, kernel_size=f_size, strides=2, padding='same')(layer_input)
-            d = LeakyReLU(alpha=0.2)(d)
+            d = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation=LeakyReLU())(layer_input)
             if normalization:
                 d = tfa.layers.InstanceNormalization()(d)
+            if pooling:
+                d = MaxPooling2D()(d)
             return d
 
-        img = keras.layers.Input(shape=self.image_shape)
+        img = keras.layers.Input(shape=self.resized_image_shape)
 
         d1 = d_layer(img, self.nb_filtres_d, normalization=False)
         d2 = d_layer(d1, self.nb_filtres_d*2)
         d3 = d_layer(d2, self.nb_filtres_d*4)
-        d4 = d_layer(d3, self.nb_filtres_d*8)
+        d4 = d_layer(d3, self.nb_filtres_d*6)
+        d5 = d_layer(d4, self.nb_filtres_d*8, pooling=False)
 
-        validity = Conv2D(1, kernel_size=4, strides=1, padding='same')(d4)
+        validity = Conv2D(1, kernel_size=3, strides=1, padding='same')(d5)
 
-        return Model(img, validity)
+        return Model(img, validity[:,:7])
     
     def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle, tensorboard_intervalle):
         start_time = datetime.datetime.now()
@@ -196,7 +208,7 @@ class CycleGan():
                     print('sauvegarde du modele...')
                     self.sauvegarde_modeles(epoch, no_batch)
             self.batch_debut = 0
-        self.tensorboard.on_train_end(None)
+        #self.tensorboard.on_train_end(None)
     
     def execute_model_on_batch(self, batch, fonction_execution):
         # Adversarial loss ground truths

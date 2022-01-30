@@ -1,6 +1,7 @@
 import numpy as np
 from pathlib import Path
 import random
+from PIL import Image
 
 import config as cfg
 
@@ -12,6 +13,9 @@ class Entree:
     def charger_image(self):
         image = np.fromfile(self.path_image, dtype=np.float32)
         image = np.reshape(image, (cfg.image_height, cfg.image_width, 3))
+        image = Image.fromarray((image*255).astype(np.uint8))
+        image = image.resize((cfg.resized_image_width, cfg.resized_image_height), Image.NEAREST)
+        image = np.array(image) / 255.
         if self.flipper:
             image = np.fliplr(image)
         return image * 2 - 1.0
