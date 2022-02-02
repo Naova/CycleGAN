@@ -12,7 +12,6 @@ def main():
     cycleGan = CycleGan(image_shape, resized_image_shape, train, validation, test)
     cycleGan.combined.summary()
     cycleGan.train(cfg.max_epoch, cfg.echantillon_intervalle, cfg.sauvegarde_intervalle, cfg.tensorboard_intervalle)
-    #breakpoint()
 
 if __name__ == '__main__':
     main()

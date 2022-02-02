@@ -111,7 +111,7 @@ class CycleGan():
                                       simu_identity, robot_identity ])
     def build_generateur(self):
         """U-Net Generator"""
-        def conv2d(layer_input, filters, f_size=3):
+        def conv2d(layer_input, filters, f_size=4):
             """Layers used during downsampling"""
             d = Conv2D(filters,
                         kernel_size=f_size,
@@ -123,7 +123,7 @@ class CycleGan():
             d = MaxPooling2D(2)(d)
             return d
 
-        def deconv2d(layer_input, skip_input, filters, f_size=3):
+        def deconv2d(layer_input, skip_input, filters, f_size=4):
             """Layers used during upsampling"""
             u = Conv2DTranspose(filters,
                                 kernel_size=f_size,
@@ -208,7 +208,7 @@ class CycleGan():
                     print('sauvegarde du modele...')
                     self.sauvegarde_modeles(epoch, no_batch)
             self.batch_debut = 0
-        #self.tensorboard.on_train_end(None)
+        self.tensorboard.on_train_end(None)
     
     def execute_model_on_batch(self, batch, fonction_execution):
         # Adversarial loss ground truths
