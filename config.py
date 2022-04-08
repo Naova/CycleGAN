@@ -13,7 +13,7 @@ dossier_brut_genere = dataset_genere_root + 'Brut/'
 
 ## Parametres d'entrainement
 #taille des batches du dataset
-batch_size = 8
+batch_size = 24
 
 #resolution de l'image d'entree
 image_height = 240
