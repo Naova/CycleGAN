@@ -73,14 +73,18 @@ class PairGenerateur:
             batch = [[i.charger_image(), j.charger_image()] for i, j in zip(simu, robot)]
             yield np.array(batch)
 
-def lire_entrees(dossier:str, augmentation:bool = False):
+def lire_entrees(dossier:str, augmentation:bool = False, flipper:bool = True):
     images = list(Path(dossier).glob('*'))
-    images = images * 2
+    if flipper:
+        images = images * 2
 
     entrees = []
 
     for i, path_image in enumerate(images):
-        flip = True if i > len(images) / 2 else False
+        if flipper:
+            flip = True if i > len(images) / 2 else False
+        else:
+            flip = False
         entrees.append(Entree(str(path_image), flip, augmentation))
     
     return entrees

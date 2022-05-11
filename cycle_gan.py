@@ -25,8 +25,8 @@ class CycleGan():
         self.data_generateur_validation = data_generateur_validation
         self.data_generateur_test = data_generateur_test
 
-        self.nb_filtres_g = 32
-        self.nb_filtres_d = 64
+        self.nb_filtres_g = 24
+        self.nb_filtres_d = 24
         
         self.lambda_cycle = 5.0
         self.lambda_identity = 0.1 * self.lambda_cycle
@@ -111,7 +111,7 @@ class CycleGan():
                                       simu_identity, robot_identity ])
     def build_generateur(self):
         """U-Net Generator"""
-        def conv2d(layer_input, filters, f_size=4):
+        def conv2d(layer_input, filters, f_size=2):
             """Layers used during downsampling"""
             d = Conv2D(filters,
                         kernel_size=f_size,
@@ -123,7 +123,7 @@ class CycleGan():
             d = MaxPooling2D(2)(d)
             return d
 
-        def deconv2d(layer_input, skip_input, filters, f_size=4):
+        def deconv2d(layer_input, skip_input, filters, f_size=2):
             """Layers used during upsampling"""
             u = Conv2DTranspose(filters,
                                 kernel_size=f_size,

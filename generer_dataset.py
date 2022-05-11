@@ -43,8 +43,10 @@ def generer_dataset(generateur, dataset_simulation, to_rgb=False):
         # plt.show()
 
 def main():
-    dataset_simulation = dataset_loader.lire_entrees(cfg.dossier_brut_simulation, False)
-    cycleGan = CycleGan((cfg.image_height, cfg.image_width, cfg.image_channels), None, None, None)
+    dataset_simulation = dataset_loader.lire_entrees(cfg.dossier_brut_simulation, True, False)
+    image_shape = (cfg.image_height, cfg.image_width, cfg.image_channels)
+    resized_image_shape = (cfg.resized_image_height, cfg.resized_image_width, cfg.image_channels)
+    cycleGan = CycleGan(image_shape, resized_image_shape, None, None, None)
     cycleGan.generateur_sim2robot.summary()
     generateur = cycleGan.generateur_sim2robot
     del cycleGan
