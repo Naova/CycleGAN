@@ -38,9 +38,7 @@ class Entree:
         return image
 
     def charger_image(self):
-        image = np.fromfile(self.path_image, dtype=np.float32)
-        image = np.reshape(image, (cfg.image_height, cfg.image_width, 3))
-        image = Image.fromarray((image*255).astype(np.uint8))
+        image = Image.open(self.path_image)
         image = image.resize((cfg.resized_image_width, cfg.resized_image_height), Image.NEAREST)
         image = np.array(image)
         if self.augmentation:
@@ -74,7 +72,7 @@ class PairGenerateur:
             yield np.array(batch)
 
 def lire_entrees(dossier:str, augmentation:bool = False, flipper:bool = True):
-    images = list(Path(dossier).glob('*'))
+    images = list(Path(dossier).glob('*/*'))
     if flipper:
         images = images * 2
 

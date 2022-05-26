@@ -2,7 +2,6 @@ h5py
 matplotlib
 numpy
 Pillow
-tensorboard==2.1.0
 tensorflow==2.1.0
 tensorflow_addons==0.8.3
 tqdm

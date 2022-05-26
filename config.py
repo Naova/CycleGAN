@@ -1,15 +1,15 @@
 ## Parametre du dataset
 #chemins d'acces vers le dataset (simulation)
 dataset_simulation_root = 'Dataset/Simulation/upper/'
-dossier_brut_simulation = dataset_simulation_root + 'Brut/'
+dossier_brut_simulation = dataset_simulation_root + 'YCbCr/'
 
 #chemins d'acces vers le dataset (robot)
 dataset_robot_root = 'Dataset/Robot/upper/'
-dossier_brut_robot = dataset_robot_root + 'Brut/'
+dossier_brut_robot = dataset_robot_root + 'YCbCr/'
 
 #chemin d'acces vers le dataset (genere)
 dataset_genere_root = 'Dataset/Genere/upper/'
-dossier_brut_genere = dataset_genere_root + 'Brut/'
+dossier_brut_genere = dataset_genere_root + 'YCbCr/'
 
 ## Parametres d'entrainement
 #taille des batches du dataset
@@ -30,7 +30,6 @@ flipper_images = True
 max_epoch = 200
 echantillon_intervalle = 25
 sauvegarde_intervalle = 25
-tensorboard_intervalle = 5
 
 #reprendre un ancien entrainement?
 charger_modeles = False

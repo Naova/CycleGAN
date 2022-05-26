@@ -11,7 +11,7 @@ def main():
     resized_image_shape = (cfg.resized_image_height, cfg.resized_image_width, cfg.image_channels)
     cycleGan = CycleGan(image_shape, resized_image_shape, train, validation, test)
     cycleGan.combined.summary()
-    cycleGan.train(cfg.max_epoch, cfg.echantillon_intervalle, cfg.sauvegarde_intervalle, cfg.tensorboard_intervalle)
+    cycleGan.train(cfg.max_epoch, cfg.echantillon_intervalle, cfg.sauvegarde_intervalle)
 
 if __name__ == '__main__':
     main()

@@ -51,17 +51,6 @@ class CycleGan():
 
             self.epoch_debut = cfg.charger_epoch
             self.batch_debut = cfg.charger_batch
-        
-        self.tensorboard = tf.keras.callbacks.TensorBoard(
-            log_dir='tensorboard_logs',
-            histogram_freq=0,
-            write_graph=True,
-            write_grads=True,
-            update_freq='batch',
-            batch_size=cfg.batch_size
-        )
-        self.tensorboard._log_write_dir = 'tensorboard_logs' #erreur etrange...
-
     def creer_modeles(self):
         #construit les discriminateurs
         self.discriminateur_simulation = self.build_discriminateur()
@@ -109,7 +98,8 @@ class CycleGan():
                             outputs=[ valid_simu, valid_robot,
                                       reconstr_simu, reconstr_robot,
                                       simu_identity, robot_identity ])
-    def build_generateur(self):
+
+    def build_unet(self, d0):
         """U-Net Generator"""
         def conv2d(layer_input, filters, f_size=2):
             """Layers used during downsampling"""
@@ -129,14 +119,11 @@ class CycleGan():
                                 kernel_size=f_size,
                                 strides=(2, 2),
                                 padding='same',
-                                activation=LeakyReLU(0.2)
+                                activation=LeakyReLU()
                             )(layer_input)
             u = tfa.layers.InstanceNormalization()(u)
             u = Concatenate()([u, skip_input])
             return u
-
-        # Image input
-        d0 = keras.layers.Input(shape=self.resized_image_shape)
 
         # Downsampling
         d1 = conv2d(d0, self.nb_filtres_g)
@@ -144,14 +131,26 @@ class CycleGan():
         d3 = conv2d(d2, self.nb_filtres_g*4)
         d4 = conv2d(d3, self.nb_filtres_g*8)
 
+        d4 = Conv2D(self.nb_filtres_g*12, kernel_size=1, strides=1,activation=LeakyReLU())(d4)
+
         # Upsampling
         u1 = deconv2d(d4, d3, self.nb_filtres_g*4)
         u2 = deconv2d(u1, d2, self.nb_filtres_g*2)
         u3 = deconv2d(u2, d1, self.nb_filtres_g)
+        u4 = deconv2d(u3, d0, self.nb_filtres_g)
 
-        u4 = UpSampling2D(size=2)(u3)
-        output_img = Conv2D(self.resized_image_shape[-1], kernel_size=4, strides=1, padding='same', activation='tanh')(u4)
+        return u4
 
+    def build_generateur(self):
+        d0 = keras.layers.Input(shape=self.resized_image_shape)
+        d1 = self.build_unet(d0)
+        d1 = Concatenate()([d1, d0])
+        d2 = self.build_unet(d1)
+        d2 = Concatenate()([d2, d0])
+        d3 = self.build_unet(d2)
+        d3 = Concatenate()([d3, d0])
+        output_img = Conv2D(64, kernel_size=3, strides=1, padding='same', activation=LeakyReLU())(d3)
+        output_img = Conv2D(self.resized_image_shape[-1], kernel_size=1, strides=1, padding='same', activation=LeakyReLU())(output_img)
         return Model(d0, output_img)
 
     def build_discriminateur(self):
@@ -176,7 +175,7 @@ class CycleGan():
 
         return Model(img, validity[:,:7])
     
-    def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle, tensorboard_intervalle):
+    def train(self, epochs:int, echantillon_intervalle, sauvegarde_intervalle):
         start_time = datetime.datetime.now()
         for epoch in range(self.epoch_debut, epochs):
             for i, batch in enumerate(self.data_generateur_train.generer_paires(self.batch_debut)):
@@ -196,19 +195,12 @@ class CycleGan():
                                                                             d_loss[0], 100*d_loss[1],
                                                                             g_loss[1],
                                                                             elapsed_time))
-                if no_batch % tensorboard_intervalle == 0:
-                    for i, batch in enumerate(self.data_generateur_validation.generer_paires()):
-                        #appelle `test_on_batch` sur le modele pour faire la validation
-                        val_d_loss, val_g_loss = self.execute_model_on_batch(batch, Model.test_on_batch)
-                        break
-                    self.tensorboard_call(no_batch + self.data_generateur_train.nb_batches() * epoch, g_loss, val_g_loss)
                 if no_batch % echantillon_intervalle == 0:
                     self.sauvegarde_echantillons(epoch, no_batch)
                 if no_batch % sauvegarde_intervalle == 0:
                     print('sauvegarde du modele...')
                     self.sauvegarde_modeles(epoch, no_batch)
             self.batch_debut = 0
-        self.tensorboard.on_train_end(None)
     
     def execute_model_on_batch(self, batch, fonction_execution):
         # Adversarial loss ground truths
@@ -237,9 +229,6 @@ class CycleGan():
                                                 batch[:,0,:,:], batch[:,1,:,:],
                                                 batch[:,0,:,:], batch[:,1,:,:]])
         return d_loss, g_loss
-
-    def tensorboard_call(self, no_epoch, train_loss, validation_loss):
-        self.tensorboard.on_epoch_end(no_epoch, {'train':train_loss, 'validation':validation_loss})
 
     def ycbcr2rgb(self, img_ycbcr:np.array):
         # Rescale image 0 - 1
