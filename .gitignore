@@ -1,6 +1,8 @@
 Dataset/
 __pycache__/
 echantillons/
+visualisation/
 modeles/
 tensorboard_logs/
 Dataset
+*.zip

@@ -25,8 +25,8 @@ class CycleGan():
         self.data_generateur_validation = data_generateur_validation
         self.data_generateur_test = data_generateur_test
 
-        self.nb_filtres_g = 24
-        self.nb_filtres_d = 24
+        self.nb_filtres_g = 32
+        self.nb_filtres_d = 32
         
         self.lambda_cycle = 5.0
         self.lambda_identity = 0.1 * self.lambda_cycle
@@ -96,7 +96,7 @@ class CycleGan():
         # Combined model trains generators to fool discriminators
         self.combined = Model(inputs=[true_simu, true_robot],
                             outputs=[ valid_simu, valid_robot,
-                                      reconstr_simu, reconstr_robot,
+                                reconstr_simu, reconstr_robot,
                                       simu_identity, robot_identity ])
 
     def build_unet(self, d0):
@@ -154,7 +154,7 @@ class CycleGan():
         return Model(d0, output_img)
 
     def build_discriminateur(self):
-        def d_layer(layer_input, filters, f_size=3, normalization=True, pooling=True):
+        def d_layer(layer_input, filters, f_size=4, normalization=True, pooling=True):
             """Discriminator layer"""
             d = Conv2D(filters, kernel_size=f_size, strides=1, padding='same', activation=LeakyReLU())(layer_input)
             if normalization:
