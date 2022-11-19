@@ -276,14 +276,16 @@ class CycleGan():
     def sauvegarde_modeles(self, epoch, batch):
         dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
         os.makedirs(dossier, exist_ok=True)
+
         if os.path.exists(f'{dossier}/discriminateur_simulation.h5'):
             return
         self.discriminateur_simulation.save_weights(f'{dossier}/discriminateur_simulation.tf')
         self.discriminateur_robot.save_weights(f'{dossier}/discriminateur_robot.tf')
         self.generateur_sim2robot.save_weights(f'{dossier}/generateur_sim2robot.tf')
         self.generateur_robot2sim.save_weights(f'{dossier}/generateur_robot2sim.tf')
+
         with open(f'{dossier}/optimizer.pkl', 'wb') as opti_file:
-            pickle.dump(self.optimizer, opti_file)
+            pickle.dump(self.optimizer.get_config(), opti_file)
 
     def charger_poids(self, epoch, batch):
         dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
@@ -295,4 +297,4 @@ class CycleGan():
     def charger_optimizer(self, epoch, batch):
         dossier = f'modeles/epoch_{epoch:03}/batch_{batch:04}'
         with open(f'{dossier}/optimizer.pkl', 'rb') as opti_file:
-            self.optimizer = pickle.load(opti_file)
+            self.optimizer = Adam.from_config(pickle.load(opti_file))

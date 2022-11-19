@@ -2,6 +2,7 @@ import numpy as np
 from pathlib import Path
 import random
 from PIL import Image
+import matplotlib.pyplot as plt
 
 import fiftyone as fo
 import fiftyone.zoo as foz
@@ -23,6 +24,25 @@ class Entree:
         cr = 128 + x[:,:,0] * 112.439 / 256 - 94.154 * x[:,:,1]/256 - 18.285 * x[:,:,2] / 256
         img = np.stack([y, cb, cr], axis=-1)
         return img
+    
+    def charger_gazon(self):
+        no_texture = random.randint(0, 10)
+        img_texture = Image.open(f'textures/texture_{no_texture}.png')
+        img_texture = img_texture.resize((cfg.resized_image_width, cfg.resized_image_height))
+        img_texture = np.array(img_texture)[:,:,:-1]
+        if random.random() < 0.5:
+            img_texture = np.fliplr(img_texture)
+        if random.random() < 0.5:
+            img_texture = np.flipud(img_texture)
+        return img_texture
+
+    def ajouter_gazon(self, image):
+        gazon = self.charger_gazon()
+        gazon = self.rgb2ycbcr(gazon)
+        dist = np.absolute(np.full((cfg.resized_image_height, cfg.resized_image_width, 3), (84, 90, 83)) - image)
+        dist = np.sum(dist, -1)
+        image[np.where(dist < 20)] = gazon[np.where(dist < 20)]
+        return image
 
     def ajouter_coco(self, image):
         mask = image == [167, 137, 127] #couleur du background gris
@@ -42,7 +62,9 @@ class Entree:
         image = image.resize((cfg.resized_image_width, cfg.resized_image_height), Image.NEAREST)
         image = np.array(image)
         if self.augmentation:
+            image = self.ajouter_gazon(image)
             image = self.ajouter_coco(image)
+            image = image + np.random.normal(scale=0.1)
         image = image / 255.
         if self.flipper:
             image = np.fliplr(image)
@@ -65,9 +87,9 @@ class PairGenerateur:
 
     def generer_paires(self, depart=0):
         for i in range(depart, self.nb_batches()):
-            j = i + self.batch_size if i + self.batch_size <= len(self.entrees_simulation) else len(self.entrees_simulation)
-            simu = self.entrees_simulation[i:j]
-            robot = random.choices(self.entrees_robot, k=self.batch_size)
+            j = i + self.batch_size if i + self.batch_size <= len(self.entrees_robot) else len(self.entrees_robot)
+            robot = self.entrees_robot[i:j]
+            simu = random.choices(self.entrees_simulation, k=self.batch_size)
             batch = [[i.charger_image(), j.charger_image()] for i, j in zip(simu, robot)]
             yield np.array(batch)
 
@@ -98,8 +120,8 @@ def split_dataset(entrees_simulation, entrees_robot, batch_size):
     return train, validation, test
 
 def create_dataset(batch_size):
-    entrees_simulation = lire_entrees(cfg.dossier_brut_simulation, True)
-    entrees_robot = lire_entrees(cfg.dossier_brut_robot)
+    entrees_simulation = lire_entrees(cfg.dossier_brut_simulation, True, True)
+    entrees_robot = lire_entrees(cfg.dossier_brut_robot, False, False)
 
     train, validation, test = split_dataset(entrees_simulation, entrees_robot, batch_size)
     return train, validation, test
