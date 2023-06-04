@@ -20,8 +20,8 @@ image_height = 240
 image_width = 320
 image_channels = 3
 
-resized_image_height = 128
-resized_image_width = 160
+resized_image_height = 240
+resized_image_width = 320
 
 #double virtuellement la taille du dataset
 flipper_images = True

@@ -18,7 +18,6 @@ import config as cfg
 
 class CycleGan():
     def __init__(self, image_shape:tuple, resized_image_shape:tuple, data_generateur_train:PairGenerateur, data_generateur_validation:PairGenerateur, data_generateur_test:PairGenerateur):
-        super(CycleGan, self).__init__()
         self.image_shape = image_shape
         self.resized_image_shape = resized_image_shape
         self.data_generateur_train = data_generateur_train
@@ -61,6 +60,7 @@ class CycleGan():
 
         #construit les generateurs
         self.generateur_sim2robot = self.build_generateur()
+        self.generateur_sim2robot.summary()
         self.generateur_sim2robot._name = 'generateur_sim2robot'
         self.generateur_robot2sim = self.build_generateur()
         self.generateur_robot2sim._name = 'generateur_robot2sim'
@@ -99,59 +99,66 @@ class CycleGan():
                                 reconstr_simu, reconstr_robot,
                                       simu_identity, robot_identity ])
 
-    def build_unet(self, d0):
-        """U-Net Generator"""
-        def conv2d(layer_input, filters, f_size=2):
-            """Layers used during downsampling"""
-            d = Conv2D(filters,
-                        kernel_size=f_size,
-                        strides=1,
-                        padding='same',
-                        activation=LeakyReLU()
-                    )(layer_input)
-            d = tfa.layers.InstanceNormalization()(d)
-            d = MaxPooling2D(2)(d)
-            return d
+    def convolution_block(
+        self,
+        block_input,
+        num_filters=256,
+        kernel_size=3,
+        dilation_rate=1,
+        padding="same",
+        use_bias=False,
+    ):
+        x = keras.layers.Conv2D(
+            num_filters,
+            kernel_size=kernel_size,
+            dilation_rate=dilation_rate,
+            padding="same",
+            use_bias=use_bias,
+        )(block_input)
+        x = keras.layers.BatchNormalization()(x)
+        return tf.nn.relu(x)
 
-        def deconv2d(layer_input, skip_input, filters, f_size=2):
-            """Layers used during upsampling"""
-            u = Conv2DTranspose(filters,
-                                kernel_size=f_size,
-                                strides=(2, 2),
-                                padding='same',
-                                activation=LeakyReLU()
-                            )(layer_input)
-            u = tfa.layers.InstanceNormalization()(u)
-            u = Concatenate()([u, skip_input])
-            return u
+    def DilatedSpatialPyramidPooling(self, dspp_input):
+        dims = dspp_input.shape
+        x = keras.layers.AveragePooling2D(pool_size=(dims[-3], dims[-2]))(dspp_input)
+        x = self.convolution_block(x, kernel_size=1, use_bias=True)
+        out_pool = keras.layers.UpSampling2D(
+            size=(dims[-3] // x.shape[1], dims[-2] // x.shape[2]), interpolation="bilinear",
+        )(x)
 
-        # Downsampling
-        d1 = conv2d(d0, self.nb_filtres_g)
-        d2 = conv2d(d1, self.nb_filtres_g*2)
-        d3 = conv2d(d2, self.nb_filtres_g*4)
-        d4 = conv2d(d3, self.nb_filtres_g*8)
+        out_1 = self.convolution_block(dspp_input, kernel_size=1, dilation_rate=1)
+        out_6 = self.convolution_block(dspp_input, kernel_size=3, dilation_rate=6)
+        out_12 = self.convolution_block(dspp_input, kernel_size=3, dilation_rate=12)
+        out_18 = self.convolution_block(dspp_input, kernel_size=3, dilation_rate=18)
 
-        d4 = Conv2D(self.nb_filtres_g*12, kernel_size=1, strides=1,activation=LeakyReLU())(d4)
-
-        # Upsampling
-        u1 = deconv2d(d4, d3, self.nb_filtres_g*4)
-        u2 = deconv2d(u1, d2, self.nb_filtres_g*2)
-        u3 = deconv2d(u2, d1, self.nb_filtres_g)
-        u4 = deconv2d(u3, d0, self.nb_filtres_g)
-
-        return u4
+        x = keras.layers.Concatenate(axis=-1)([out_pool, out_1, out_6, out_12, out_18])
+        output = self.convolution_block(x, kernel_size=1)
+        return output
 
     def build_generateur(self):
-        d0 = keras.layers.Input(shape=self.resized_image_shape)
-        d1 = self.build_unet(d0)
-        d1 = Concatenate()([d1, d0])
-        d2 = self.build_unet(d1)
-        d2 = Concatenate()([d2, d0])
-        d3 = self.build_unet(d2)
-        d3 = Concatenate()([d3, d0])
-        output_img = Conv2D(64, kernel_size=3, strides=1, padding='same', activation=LeakyReLU())(d3)
-        output_img = Conv2D(self.resized_image_shape[-1], kernel_size=1, strides=1, padding='same', activation=LeakyReLU())(output_img)
-        return Model(d0, output_img)
+        model_input = keras.Input(shape=(self.image_shape[0], self.image_shape[1], 3))
+        resnet50 = keras.applications.ResNet50(
+            weights="imagenet", include_top=False, input_tensor=model_input
+        )
+        x = resnet50.get_layer("conv4_block6_2_relu").output
+        x = self.DilatedSpatialPyramidPooling(x)
+
+        input_a = keras.layers.UpSampling2D(
+            size=(self.image_shape[0] // 4 // x.shape[1], self.image_shape[1] // 4 // x.shape[2]),
+            interpolation="bilinear",
+        )(x)
+        input_b = resnet50.get_layer("conv2_block3_2_relu").output
+        input_b = self.convolution_block(input_b, num_filters=48, kernel_size=1)
+
+        x = keras.layers.Concatenate(axis=-1)([input_a, input_b])
+        x = self.convolution_block(x)
+        x = self.convolution_block(x)
+        x = keras.layers.UpSampling2D(
+            size=(self.image_shape[0] // x.shape[1], self.image_shape[1] // x.shape[2]),
+            interpolation="bilinear",
+        )(x)
+        model_output = keras.layers.Conv2D(3, kernel_size=(1, 1), padding="same")(x)
+        return keras.Model(inputs=model_input, outputs=model_output)
 
     def build_discriminateur(self):
         def d_layer(layer_input, filters, f_size=4, normalization=True, pooling=True):
